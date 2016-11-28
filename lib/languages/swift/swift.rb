@@ -58,10 +58,12 @@ end
 # Returns the string for defning a class variable, called form the swift class erb file
 def field_variable(field,cls)
   lines = []
-  var_def = "\tvar #{mapped_name(cls, field, :field)}:#{field_datatype(field,field[:type])}"
-  if field[:type].last == "object" || !is_primitive?(field[:type].last) then
+  var_def = "\tpublic var #{mapped_name(cls, field, :field)}:#{field_datatype(field,field[:type])}"
+  if field[:type].last == "object"  || !is_primitive?(field[:type].last) then
     lines.push(var_def+"? = nil")
-  elsif
+  elsif field[:type].last == "talkobject"
+    lines.push(var_def+" = [:]")
+  else
     lines.push(var_def+" = #{field_datatype(field,field[:type])}()")
   end
   lines.join("\n")
@@ -95,7 +97,7 @@ def converted_field_type(type)
     when "object"
       "Any"
     when "talkobject"
-      @prefix+rootclass
+      "[String:Any]"
     when "int8"
       "Int"
     when "uint8"
@@ -167,12 +169,12 @@ def struct_block(tag,struct_name, indent_level=1)
   lines.push((tag.map { |child| " - "+ child[:name]+": "+ (child[:description].nil? ? "" : child[:description] )}).join("\n"))
   lines.push("*/")
   lines.push(" ")
-  lines.push("struct " + "Talk" + struct_name + " {")
+  lines.push("public struct " + "Talk" + struct_name + " {")
   lines.push(" ")
   tag.each do |child| 
     seen_children = []
     lines.push(documentation_block(child,struct_name,indent_level))
-    lines.push(indent + "struct " + struct_name_for_type(struct_name,child) + " {")
+    lines.push(indent + "public struct " + struct_name_for_type(struct_name,child) + " {")
     child[child_type_for_type(struct_name)].each do |child_type|
         unless seen_children.include? child_type[:name]
             lines.push( indent+indent+definition_for_child_type(struct_name,child_type))
@@ -216,11 +218,11 @@ end
 def definition_for_child_type(type,tag)
     case type.downcase
     when "protocol"
-      "static let "+ tag[:name]+" = \"" + tag[:name] + "\""
+      "public static let "+ tag[:name]+" = \"" + tag[:name] + "\""
     when "glossary"
-      "static let "+ tag[:name]+" = \"" + tag[:name] + "\""
+      "public static let "+ tag[:name]+" = \"" + tag[:value] + "\""
     when "enumeration"
-      "static let #{tag[:name]} = #{tag[:value].to_i}"
+      "public static let #{tag[:name]} = #{tag[:value].to_i}"
     end
 end
 
@@ -245,8 +247,17 @@ def mapper_protocol(mapper,cls)
       when "tailor"
         ",Mappable"
       when "objectmapper"
-        ",Mappable"
+        ""
     end unless is_subclass?(cls)
+end
+
+def mapper_import(mapper)
+  case mapper.downcase
+    when "tailor"
+      "import Tailor"
+    when "objectmapper"
+      "import ObjectMapper"
+    end
 end
 
 def tailor_block(cls)
@@ -254,29 +265,28 @@ def tailor_block(cls)
   map = ""
   map = "map" if is_subclass?(cls)
 
-  lines.push("\trequired convenience init(_ map: [String : AnyObject]) {")
+  lines.push("\tpublic required convenience init(_ map: [String : AnyObject]) {")
   lines.push("\t\tself.init(" + map + ")") 
   cls[:field].map do |f|  
     lines.push("\t\t"+mapped_name(cls, f, :field)+"\t<- map.property(\""+ f[:name] +"\")")
   end
+  lines.push("\t\t__class \t<- map.property(\"__class\")")
   lines.push("\t}")
   lines.join("\n")
 end
 
 def objectmapper_block(cls)
   lines = []  
-  lines.push("\trequired init?(map: Map) {")
-  lines.push("\t\tsuper.init(map: map)") if is_subclass?(cls)
+  lines.push("\tpublic required init?(map: Map) {")
+  lines.push("\t\tsuper.init(map: map)") 
   lines.push("\t}")
   lines.push(" ")
-  if is_subclass?(cls) then
-    lines.push("\toverride func mapping(map: Map) {")
-  else
-    lines.push("\tfunc mapping(map: Map) {")
-  end
+  lines.push("\tpublic override func mapping(map: Map) {")
+  lines.push("\t\tsuper.mapping(map: map)")
   cls[:field].map do |f|  
     lines.push("\t\t"+mapped_name(cls, f, :field)+"\t<- map[\""+ f[:name] +"\"]")
   end
+  lines.push("\t\t__class \t<- map[\"__class\"]")
   lines.push("\t}")
   lines.join("\n")
 end
