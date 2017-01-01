@@ -14,10 +14,10 @@
 <% @base[:enumeration].each do |enumeration| %>
 
 <%= comment_block(enumeration) %>
-enum <%= truncated_name(enumeration[:name]) %>
+typedef enum <%= truncated_name(enumeration[:name]) %>
 {
   <%= (enumeration[:constant].map { |constant| "\t"+constant_definition(constant) }).join("\n") %>
-};
+} <%= truncated_name(enumeration[:name]) %>;
 
 <% end # enumeration %>
 
